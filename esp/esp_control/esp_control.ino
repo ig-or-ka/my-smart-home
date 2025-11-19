@@ -41,7 +41,8 @@ void setup() {
 
   DynamicJsonDocument doc(1024);
   doc["type"] = "start";
-  reqs->post(host_address, host_port, "/counter_event/", doc);
+  auto r = reqs->post(host_address, host_port, "/counter_event/", doc);
+  Serial.println(r);
 }
 
 void loop() {
@@ -59,7 +60,7 @@ void loop() {
 
       DynamicJsonDocument doc(1024);
       doc["type"] = "cold";
-      doc["value"] = String(cold_pulse_current);
+      doc["value"] = cold_pulse_current;
       reqs->post(host_address, host_port, "/counter_event/", doc);
     }
     if(pulseCount_hot > lastHot){
@@ -68,7 +69,7 @@ void loop() {
 
       DynamicJsonDocument doc(1024);
       doc["type"] = "hot";
-      doc["value"] = String(hot_pulse_current);
+      doc["value"] = hot_pulse_current;
       reqs->post(host_address, host_port, "/counter_event/", doc);
     }
 
