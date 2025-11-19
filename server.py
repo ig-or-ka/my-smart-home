@@ -1,6 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from pydantic import BaseModel, Field
 from datetime import datetime
+import config
 from database import (
     async_db_session, MeterReading, EventType, select
 )
@@ -14,7 +15,10 @@ class Item(BaseModel):
 
 
 @app.post("/counter_event/")
-async def counter_event(item: Item):
+async def counter_event(request: Request, item: Item):
+    if request.client.host != config.esp_host:
+        return {'status':'error'}
+
     event_type = EventType[item.type_event]
 
     async with async_db_session() as session:

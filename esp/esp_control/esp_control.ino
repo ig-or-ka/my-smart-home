@@ -47,12 +47,13 @@ void setup() {
 
 void loop() {
   static unsigned long lastPrint = 0;
+  static unsigned long lastPing = 0;
   static unsigned long lastHot = 0;
   static unsigned long lastCold = 0;
   if (millis() - lastPrint > 1000) {
     lastPrint = millis();
-    Serial.printf("Показания: %lu импульсов cold\n", pulseCount_cold);
-    Serial.printf("Показания: %lu импульсов hot\n", pulseCount_hot);
+    // Serial.printf("Показания: %lu импульсов cold\n", pulseCount_cold);
+    // Serial.printf("Показания: %lu импульсов hot\n", pulseCount_hot);
 
     if(pulseCount_cold > lastCold){
       unsigned long cold_pulse_current = pulseCount_cold - lastCold;
@@ -73,8 +74,11 @@ void loop() {
       reqs->post(host_address, host_port, "/counter_event/", doc);
     }
 
-    // DynamicJsonDocument doc(1024);
-    // doc["type"] = "ping";
-    // Serial.println(reqs->post(host_address, host_port, "/counter_event/", doc));
+    if (millis() - lastPing > 30000) {
+      lastPing = millis();
+      DynamicJsonDocument doc(1024);
+      doc["type"] = "ping";
+      Serial.println(reqs->post(host_address, host_port, "/counter_event/", doc));
+    }
   }
 }
