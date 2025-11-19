@@ -69,6 +69,14 @@ async def calculate_readings_msg():
             cold_today_sum = 0
             hot_month_sum = 0
             cold_month_sum = 0
+            ping_time = 999
+
+            ping_query = select(MeterReading).where(MeterReading.event_type == EventType.ping)
+            ping_cur = await session.execute(ping_query)
+            ping_obj = ping_cur.scalar()
+
+            if ping_obj:
+                ping_time = (datetime.now() - ping_obj.time).total_seconds()
 
             readings = select(MeterReading).where(
                 MeterReading.time > start_day
@@ -93,7 +101,8 @@ async def calculate_readings_msg():
     hot_square = round(hot_month_sum / 100, 3)
     sum_month = round(cold_square+hot_square, 3)
     sum_day = cold_today_sum * 10 + hot_today_sum * 10
-    msg += f'Месяц:\nНорма: {config.month_square_norm}к\n'\
+    msg += f'Контроллер: {'🟢' if ping_time < 120 else '🔴'} {round(ping_time)}с\n\n'\
+        f'Месяц:\nНорма: {config.month_square_norm}к\n'\
         f'Использовано холодной: {cold_square}к\n'\
         f'Использовано горячей: {hot_square}к\n'\
         f'Сумма: {sum_month}к {round(sum_month / config.month_square_norm * 100, 2)}%\n\n'\
