@@ -32,7 +32,7 @@ def meters_keyboards():
 
     keyboard.row(InlineKeyboardButton(
         text='Обновить', 
-        callback_data='meters_update'
+        callback_data='meter_readings'
     ))
     keyboard.row(InlineKeyboardButton(
         text='Назад', 
@@ -109,7 +109,7 @@ async def calculate_readings_msg():
         f'День:\nНорма: {round(config.month_square_norm * 1000 / count_days)}л\n'\
         f'Использовано холодной: {cold_today_sum * 10}л\n'\
         f'Использовано горячей: {hot_today_sum * 10}л\n'\
-        f'Сумма: {sum_day}л {round(sum_day / config.month_square_norm * count_days / 10, 2)}%\n'\
+        f'Сумма: {sum_day}л {round(sum_day / config.month_square_norm * count_days / 10, 2)}%'\
 
     return msg
    
@@ -135,6 +135,11 @@ async def _(callback: CallbackQuery):
 
         case 'meter_readings':
             msg = await calculate_readings_msg()
+
+            if msg == callback.message.text:
+                await callback.answer('Нет обновлений!')
+                return
+
             await callback.message.edit_text(msg, reply_markup=meters_keyboards())
 
 
