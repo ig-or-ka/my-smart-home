@@ -1,5 +1,5 @@
 import os, asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum, auto
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import Mapped
@@ -31,6 +31,16 @@ class MeterReading(Base):
     event_type: Mapped[EventType]
     value: Mapped[int] = mapped_column(default=0)
     time: Mapped[datetime]
+
+
+class DailyTask(Base):
+    __tablename__ = "daily_task"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int]
+    desc: Mapped[str]
+    everyday: Mapped[bool] = mapped_column(default=False)
+    dtime: Mapped[datetime] = mapped_column(nullable=True)
+    time: Mapped[timedelta] = mapped_column(nullable=True)
 
 
 async def start_db() -> None:

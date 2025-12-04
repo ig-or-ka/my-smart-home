@@ -1,14 +1,21 @@
 import asyncio
 import config
 import aiogram
-from aiogram.enums import ParseMode
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, StateFilter
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton, CallbackQuery
 import database
+from sqlalchemy import delete
 from database import select, MeterReading, EventType
 from datetime import datetime, timedelta
+import task_manager
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 
+
+
+class FSM_User(StatesGroup):
+    add_task = State()
 
 
 class VARS:
@@ -22,6 +29,14 @@ def main_keyboard():
     keyboard.row(InlineKeyboardButton(
         text='Счетчики', 
         callback_data='meter_readings'
+    ))
+    keyboard.row(InlineKeyboardButton(
+        text='Добавить задачу', 
+        callback_data='add_task'
+    ))
+    keyboard.row(InlineKeyboardButton(
+        text='Текущие задачи', 
+        callback_data='current_tasks'
     ))
 
     return keyboard.as_markup()
@@ -37,6 +52,45 @@ def meters_keyboards():
     keyboard.row(InlineKeyboardButton(
         text='Назад', 
         callback_data='main_menu'
+    ))
+
+    return keyboard.as_markup()
+
+
+async def tasks_keyboard():
+    keyboard = InlineKeyboardBuilder()
+    now = datetime.now()
+
+    async with database.async_db_session() as session:
+        async with session.begin():
+            cur = await session.execute(select(database.DailyTask))
+
+            for task in cur.scalars():
+                if task.everyday or task.dtime > now:
+                    if task.everyday:
+                        text = f"{task.time.seconds // 3600}:{task.time.seconds % 3600 // 60} {task.desc}"
+                    else:
+                        text = f"{task.dtime.strftime("%H:%M %d.%m.%Y")} {task.desc}"
+
+                    keyboard.row(InlineKeyboardButton(
+                        text=text, 
+                        callback_data=f'remove_task:{task.id}'
+                    ))
+
+    keyboard.row(InlineKeyboardButton(
+        text='Назад', 
+        callback_data='main_menu'
+    ))
+
+    return keyboard.as_markup()
+
+
+def one_button_keyboard(text='Отмена', cdata='main_menu'):
+    keyboard = InlineKeyboardBuilder()
+
+    keyboard.row(InlineKeyboardButton(
+        text=text, 
+        callback_data=cdata
     ))
 
     return keyboard.as_markup()
@@ -125,12 +179,80 @@ async def start_cmd(message: aiogram.types.Message):
     await message.answer('Меню', reply_markup=main_keyboard())
 
 
+@user_router.message(StateFilter(FSM_User.add_task))
+async def _(message: aiogram.types.Message, state: FSMContext):
+    await message.delete()
+    data = await state.get_data()
+    segs = message.text.split()
+    wrong_format = True
+
+    if len(segs) > 1:
+        if '.' in segs[0] and ':' in segs[1]:
+            if len(segs) > 2:
+                now = datetime.now()
+                try:
+                    task_time = datetime.strptime(f"{segs[0]}.{now.year} {segs[1]}", "%d.%m.%Y %H:%M")
+                except: pass
+                else:
+                    desc = message.text.replace(f"{segs[0]} {segs[1]} ", '')
+
+                    async with database.async_db_session() as session:
+                        async with session.begin():
+                            session.add(database.DailyTask(
+                                user_id=message.from_user.id,
+                                desc=desc,
+                                dtime=task_time
+                            ))
+
+                    wrong_format = False
+
+        elif ':' in segs[0]:
+            try:
+                time_segs = segs[0].split(':')
+                task_time = timedelta(hours=int(time_segs[0]), minutes=int(time_segs[1]))
+            except: pass
+            else:
+                desc = message.text.replace(f"{segs[0]} ", '')
+
+                async with database.async_db_session() as session:
+                    async with session.begin():
+                        session.add(database.DailyTask(
+                            user_id=message.from_user.id,
+                            desc=desc,
+                            everyday=True,
+                            time=task_time
+                        ))
+
+                wrong_format = False
+
+    if wrong_format:
+        try:
+            await VARS.bot.edit_message_text(
+                "Неправильный формат",
+                chat_id=message.chat.id,
+                message_id=data['msg_id'],
+                reply_markup=one_button_keyboard()
+            )
+        except: pass
+
+    else:
+        await state.clear()
+
+        await VARS.bot.edit_message_text(
+            "Задача успешно добавлена",
+            chat_id=message.chat.id,
+            message_id=data['msg_id'],
+            reply_markup=one_button_keyboard("Готово")
+        )
+
+
 @user_router.callback_query()
-async def _(callback: CallbackQuery):
+async def _(callback: CallbackQuery, state: FSMContext):
     data = callback.data.split(':')
 
     match data[0]:
         case 'main_menu':
+            await state.clear()
             await callback.message.edit_text('Меню', reply_markup=main_keyboard())
 
         case 'meter_readings':
@@ -142,12 +264,46 @@ async def _(callback: CallbackQuery):
 
             await callback.message.edit_text(msg, reply_markup=meters_keyboards())
 
+        case 'task_done':
+            await task_manager.task_done(data[1], callback.message)
+
+        case 'add_task':
+            await state.set_state(FSM_User.add_task)
+            await state.set_data({
+                'msg_id':callback.message.message_id
+            })
+            await callback.message.edit_text(
+                "Введите задание в формате чч:mm *текст задания*, если задание ежедневное, или дд.mm чч:mm *текст задания*, если задание одноразовое", 
+                reply_markup=one_button_keyboard()
+            )
+
+        case 'current_tasks':
+            await callback.message.edit_text(
+                "Выберите задачу для удаления", 
+                reply_markup=await tasks_keyboard()
+            )
+
+        case 'remove_task':
+            async with database.async_db_session() as session:
+                async with session.begin():
+                    await session.execute(
+                        delete(database.DailyTask)
+                        .where(database.DailyTask.id == int(data[1])
+                    )
+                )
+                    
+            await callback.message.edit_text(
+                "Задача удалена", 
+                reply_markup=one_button_keyboard("Готово")
+            )
+
 
 async def main():
     VARS.loop = asyncio.get_running_loop()
     dp = aiogram.Dispatcher()
     dp.include_router(user_router)
 
+    await task_manager.init(VARS.bot)
     await dp.start_polling(VARS.bot)
 
 
