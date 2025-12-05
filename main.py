@@ -1,6 +1,7 @@
 import asyncio
 import config
 import aiogram
+from aiogram.enums import ParseMode 
 from aiogram.filters import CommandStart, StateFilter
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton, CallbackQuery
@@ -57,7 +58,7 @@ def meters_keyboards():
     return keyboard.as_markup()
 
 
-async def tasks_keyboard():
+async def tasks_keyboard(user_id):
     keyboard = InlineKeyboardBuilder()
     now = datetime.now()
 
@@ -66,7 +67,7 @@ async def tasks_keyboard():
             cur = await session.execute(select(database.DailyTask))
 
             for task in cur.scalars():
-                if task.everyday or task.dtime > now:
+                if task.user_id == user_id and (task.everyday or task.dtime > now):
                     if task.everyday:
                         text = f"{task.time.seconds // 3600}:{task.time.seconds % 3600 // 60} {task.desc}"
                     else:
@@ -198,11 +199,13 @@ async def _(message: aiogram.types.Message, state: FSMContext):
 
                     async with database.async_db_session() as session:
                         async with session.begin():
-                            session.add(database.DailyTask(
+                            task = database.DailyTask(
                                 user_id=message.from_user.id,
                                 desc=desc,
                                 dtime=task_time
-                            ))
+                            )
+                            session.add(task)
+                            task_manager.new_task(task)
 
                     wrong_format = False
 
@@ -216,12 +219,14 @@ async def _(message: aiogram.types.Message, state: FSMContext):
 
                 async with database.async_db_session() as session:
                     async with session.begin():
-                        session.add(database.DailyTask(
+                        task = database.DailyTask(
                             user_id=message.from_user.id,
                             desc=desc,
                             everyday=True,
                             time=task_time
-                        ))
+                        )
+                        session.add(task)
+                        task_manager.new_task(task)
 
                 wrong_format = False
 
@@ -272,15 +277,21 @@ async def _(callback: CallbackQuery, state: FSMContext):
             await state.set_data({
                 'msg_id':callback.message.message_id
             })
+
+            txt = "Введите задание в формате:\n"\
+                "<b>чч:mm *текст задания*</b> - если задание ежедневное\n"\
+                "<b>дд.mm чч:mm *текст задания*</b> - если задание одноразовое"
+
             await callback.message.edit_text(
-                "Введите задание в формате чч:mm *текст задания*, если задание ежедневное, или дд.mm чч:mm *текст задания*, если задание одноразовое", 
-                reply_markup=one_button_keyboard()
+                txt, 
+                reply_markup=one_button_keyboard(),
+                parse_mode=ParseMode.HTML
             )
 
         case 'current_tasks':
             await callback.message.edit_text(
                 "Выберите задачу для удаления", 
-                reply_markup=await tasks_keyboard()
+                reply_markup=await tasks_keyboard(callback.from_user.id)
             )
 
         case 'remove_task':

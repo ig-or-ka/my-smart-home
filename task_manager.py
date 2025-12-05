@@ -3,7 +3,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from database import DailyTask, select
 import asyncio, database, datetime
 from aiogram import Bot, types
-import uuid
+import uuid, config
 
 
 
@@ -38,19 +38,24 @@ async def day_task(task_info: DailyTask):
         msgs_ids = VARS.sended_messenges.setdefault(uuid_task, [])
         msgs_ids.append(msg.message_id)
 
-        await asyncio.sleep(5)
+        await asyncio.sleep(config.repet_task_time)
 
 
 async def task_done(uuid_task, msg: types.Message):
     await msg.edit_text(msg.text + "\n\n✅ Задача выполнена!")
 
+    if uuid_task not in VARS.sended_messenges:
+        return
+
     VARS.done_tasks.add(uuid_task)
     msgs = VARS.sended_messenges[uuid_task]
     msgs.remove(msg.message_id)
-    await VARS.bot.delete_messages(msg.from_user.id, msgs)
+
+    if len(msgs) > 0:
+        await VARS.bot.delete_messages(msg.chat.id, msgs)
             
 
-async def new_task(task_info: DailyTask):
+def new_task(task_info: DailyTask):
     if task_info.everyday:
         VARS.scheduler.add_job(
             day_task, 
@@ -80,7 +85,7 @@ async def init(bot: Bot):
 
             for task in cur.scalars():
                 if task.everyday or task.dtime > now:
-                    await new_task(task)
+                    new_task(task)
 
 
 if __name__ == "__main__":
