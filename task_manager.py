@@ -12,6 +12,7 @@ class VARS:
     bot: Bot = None
     done_tasks = set()
     sended_messenges = dict()
+    task_jobs = dict()
 
 
 async def day_task(task_info: DailyTask):
@@ -57,7 +58,7 @@ async def task_done(uuid_task, msg: types.Message):
 
 def new_task(task_info: DailyTask):
     if task_info.everyday:
-        VARS.scheduler.add_job(
+        job = VARS.scheduler.add_job(
             day_task, 
             'cron', 
             args=(task_info,),
@@ -66,12 +67,19 @@ def new_task(task_info: DailyTask):
         )
 
     else:
-        VARS.scheduler.add_job(
+        job = VARS.scheduler.add_job(
             day_task,
             'date', 
             args=(task_info,),
             run_date=task_info.dtime
         )
+
+    VARS.task_jobs[task_info.id] = job.id
+
+
+def remove_task(task_id):
+    if task_id in VARS.task_jobs:
+        VARS.scheduler.remove_job(VARS.task_jobs[task_id])
 
 
 async def init(bot: Bot):

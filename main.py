@@ -205,6 +205,7 @@ async def _(message: aiogram.types.Message, state: FSMContext):
                                 dtime=task_time
                             )
                             session.add(task)
+                            await session.commit()
                             task_manager.new_task(task)
 
                     wrong_format = False
@@ -226,6 +227,7 @@ async def _(message: aiogram.types.Message, state: FSMContext):
                             time=task_time
                         )
                         session.add(task)
+                        await session.commit()
                         task_manager.new_task(task)
 
                 wrong_format = False
@@ -302,6 +304,7 @@ async def _(callback: CallbackQuery, state: FSMContext):
                         .where(database.DailyTask.id == int(data[1])
                     )
                 )
+            task_manager.remove_task(int(data[1]))
                     
             await callback.message.edit_text(
                 "Задача удалена", 
