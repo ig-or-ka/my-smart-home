@@ -312,11 +312,42 @@ async def _(callback: CallbackQuery, state: FSMContext):
             )
 
 
+async def controller_checker_task():
+    sended = False
+    pred_ping_time = 999
+
+    while True:
+        ping_time = 999
+        async with database.async_db_session() as session:
+            async with session.begin():
+
+                ping_query = select(MeterReading).where(MeterReading.event_type == EventType.ping)
+                ping_cur = await session.execute(ping_query)
+                ping_obj = ping_cur.scalar()
+
+                if ping_obj:
+                    ping_time = (datetime.now() - ping_obj.time).total_seconds()
+
+        if ping_time > 60 and not sended:
+            try:
+                await VARS.bot.send_message(config.admin_id[0], 'Контроллер отключился!')
+                sended = True
+            except: pass
+
+        if ping_time < pred_ping_time:
+            sended = False
+
+        pred_ping_time = ping_time
+
+        await asyncio.sleep(60)
+
+
 async def main():
     VARS.loop = asyncio.get_running_loop()
     dp = aiogram.Dispatcher()
     dp.include_router(user_router)
 
+    VARS.loop.create_task(controller_checker_task())
     await task_manager.init(VARS.bot)
     await dp.start_polling(VARS.bot)
 
