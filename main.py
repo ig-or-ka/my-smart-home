@@ -12,6 +12,8 @@ from datetime import datetime, timedelta
 import task_manager
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiohttp import BasicAuth
+from aiogram.client.session.aiohttp import AiohttpSession
 
 
 
@@ -20,7 +22,9 @@ class FSM_User(StatesGroup):
 
 
 class VARS:
-    bot = aiogram.Bot(token=config.telegram_bot_token)
+    auth = BasicAuth(login=config.tg_proxy[0], password=config.tg_proxy[1])
+    session = AiohttpSession(proxy=(f'http://{config.tg_proxy[2]}:{config.tg_proxy[3]}', auth))
+    bot = aiogram.Bot(token=config.telegram_bot_token, session=session)
     loop: asyncio.AbstractEventLoop = None
 
 
