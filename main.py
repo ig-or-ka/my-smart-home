@@ -74,6 +74,10 @@ async def tasks_keyboard(user_id):
                 if task.user_id == user_id and (task.everyday or task.dtime > now):
                     if task.everyday:
                         text = f"{task.time.seconds // 3600}:{task.time.seconds % 3600 // 60} {task.desc}"
+
+                        if task.day_of_week:
+                            text = f"{task.day_of_week} {text}"
+
                     else:
                         text = f"{task.dtime.strftime("%H:%M %d.%m.%Y")} {task.desc}"
 
@@ -221,6 +225,12 @@ async def _(message: aiogram.types.Message, state: FSMContext):
             except: pass
             else:
                 desc = message.text.replace(f"{segs[0]} ", '')
+                desc_segs = desc.split()
+                
+                day_of_week = None
+                if desc_segs[0] in {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}:
+                    day_of_week = desc_segs[0]
+                    desc = desc.replace(f"{day_of_week} ", '')
 
                 async with database.async_db_session() as session:
                     async with session.begin():
@@ -228,7 +238,8 @@ async def _(message: aiogram.types.Message, state: FSMContext):
                             user_id=message.from_user.id,
                             desc=desc,
                             everyday=True,
-                            time=task_time
+                            time=task_time,
+                            day_of_week=day_of_week
                         )
                         session.add(task)
                         await session.commit()
@@ -286,7 +297,9 @@ async def _(callback: CallbackQuery, state: FSMContext):
 
             txt = "Введите задание в формате:\n"\
                 "<b>чч:mm *текст задания*</b> - если задание ежедневное\n"\
-                "<b>дд.mm чч:mm *текст задания*</b> - если задание одноразовое"
+                "<b>чч:mm день_недели *текст задания*</b> - если задание ежедневное\n"\
+                "<b>дд.mm чч:mm *текст задания*</b> - если задание одноразовое\n\n"\
+                "Названия дней недели: <code>mon</code> <code>tue</code> <code>wed</code> <code>thu</code> <code>fri</code> <code>sat</code> <code>sun</code>"
 
             await callback.message.edit_text(
                 txt, 

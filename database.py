@@ -39,6 +39,7 @@ class DailyTask(Base):
     user_id: Mapped[int]
     desc: Mapped[str]
     everyday: Mapped[bool] = mapped_column(default=False)
+    day_of_week: Mapped[str] = mapped_column(default=None, nullable=True)
     dtime: Mapped[datetime] = mapped_column(nullable=True)
     time: Mapped[timedelta] = mapped_column(nullable=True)
 

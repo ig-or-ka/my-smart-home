@@ -62,6 +62,7 @@ def new_task(task_info: DailyTask):
             day_task, 
             'cron', 
             args=(task_info,),
+            day_of_week=task_info.day_of_week,
             hour=task_info.time.seconds // 3600,
             minute=task_info.time.seconds % 3600 // 60
         )
